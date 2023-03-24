@@ -27,8 +27,8 @@ make
 ```
 Return to project page and link
 ```bash
-cd ..
-export PYTHONPATH=./lib:${PYTHONPATH}
+cd ../..
+export PYTHONPATH=./astar_cpp/lib:${PYTHONPATH}
 ```
 
 4. Generate dataset

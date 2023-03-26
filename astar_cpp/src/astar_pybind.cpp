@@ -78,27 +78,21 @@ namespace astar
 
   typedef pybind11::array_t<float, pybind11::array::c_style | pybind11::array::forcecast> pyArrayXd;
   typedef pybind11::array_t<int, pybind11::array::c_style | pybind11::array::forcecast> pyArrayXi;
-  
 
   void
-  planOn2DGrid(const pybind11::array & cMap,
-               const pybind11::array & start,
-               const pybind11::array & goal,
-               pybind11::array & Q_batch,
-               pybind11::array & dQdc_batch,
-               pybind11::array & g_batch,
-               int k,
-               float epsilon = 1.0)
+    planOn2DGrid_cpp(
+        const pybind11::detail::unchecked_reference<float, 3>& cMapData,
+        const pybind11::detail::unchecked_reference<int, 1>& startData,
+        const pybind11::detail::unchecked_reference<int, 1>& goalData,
+        pybind11::detail::unchecked_mutable_reference<float, 2>& Q_batchData,
+        pybind11::detail::unchecked_mutable_reference<float, 5>& dQdc_batchData,
+        pybind11::detail::unchecked_mutable_reference<float, 3>& g_batchData,
+        size_t xDim,
+        size_t yDim,
+        int k,
+        float epsilon = 1.0)
   {
-    // Get references to the data and dimensions
-    auto cMapData = cMap.unchecked<float,3>();
-    auto startData = start.unchecked<int,1>();
-    auto goalData = goal.unchecked<int,1>();
-    auto Q_batchData = Q_batch.mutable_unchecked<float,2>();
-    auto dQdc_batchData = dQdc_batch.mutable_unchecked<float,5>();
-    auto g_batchData = g_batch.mutable_unchecked<float,3>();
-    size_t xDim = cMapData.shape(1);
-    size_t yDim = cMapData.shape(2);
+
     size_t cMapLength = xDim*yDim;
 
     // Initialize the HashMap and Heap
@@ -236,25 +230,94 @@ namespace astar
     }
   }
 
- 
+  void
+  planOn2DGrid(const pybind11::array & cMap,
+               const pybind11::array & start,
+               const pybind11::array & goal,
+               pybind11::array & Q_batch,
+               pybind11::array & dQdc_batch,
+               pybind11::array & g_batch,
+               int k,
+               float epsilon = 1.0) 
+  {
+
+    // Get references to the data and dimensions
+    auto cMapData = cMap.unchecked<float,3>();
+    auto startData = start.unchecked<int,1>();
+    auto goalData = goal.unchecked<int,1>();
+    auto Q_batchData = Q_batch.mutable_unchecked<float,2>();
+    auto dQdc_batchData = dQdc_batch.mutable_unchecked<float,5>();
+    auto g_batchData = g_batch.mutable_unchecked<float,3>();
+    size_t xDim = cMapData.shape(1);
+    size_t yDim = cMapData.shape(2);
+    planOn2DGrid_cpp(cMapData,
+        startData,
+        goalData,
+        Q_batchData,
+        dQdc_batchData,
+        g_batchData,
+        xDim,
+        yDim,
+        k,
+        epsilon);
+  }
+
   void
   planBatch2DGrid(const pyArrayXd &cMap_batch,
                   const pyArrayXi &start_batch,
                   const pyArrayXi &goal_batch,
                   pyArrayXd &Q_batch,
                   pyArrayXd &dQdc_batch,
-                  pyArrayXd &g_batch) {
+                  pyArrayXd &g_batch) 
+  {
     // Get references to the data and dimensions
     auto cMapData_batch = cMap_batch.unchecked<4>();
     size_t batch_size = cMapData_batch.shape(0);
 
-    // iterate over each map
-    for (int k = 0; k < batch_size; k++) 
-    {
-      planOn2DGrid(cMap_batch[pybind11::make_tuple(k, pybind11::ellipsis())],
-                   start_batch[pybind11::make_tuple(k, pybind11::ellipsis())],
-                   goal_batch[pybind11::make_tuple(k, pybind11::ellipsis())],
-                   Q_batch, dQdc_batch, g_batch, k);
+    // We need to avoid python operations in the threads, so need to put
+    // indexed arrays in a cpp vector.
+    std::vector<pybind11::detail::unchecked_reference<float, 3>> cMap_batch_vec;
+    std::vector<pybind11::detail::unchecked_reference<int, 1>> start_batch_vec;
+    std::vector<pybind11::detail::unchecked_reference<int, 1>> goal_batch_vec;
+    std::vector<size_t> xDim_vec;
+    std::vector<size_t> yDim_vec;
+
+    for (int k = 0; k < batch_size; k++) {
+      auto k_ellipsis = pybind11::make_tuple(k, pybind11::ellipsis());
+      const pybind11::array& cMap_batch_k = cMap_batch[k_ellipsis];
+      auto cMap_batchData = cMap_batch_k.unchecked<float,3>();
+      cMap_batch_vec.push_back(cMap_batchData);
+
+      xDim_vec.push_back(cMap_batchData.shape(1));
+      yDim_vec.push_back(cMap_batchData.shape(2));
+
+      const pybind11::array& start_batch_k = start_batch[k_ellipsis];
+      auto start_batchData = start_batch_k.unchecked<int, 1>();
+      start_batch_vec.push_back(start_batchData);
+
+      const pybind11::array& goal_batch_k = goal_batch[k_ellipsis];
+      auto goal_batchData = goal_batch_k.unchecked<int, 1>();
+      goal_batch_vec.push_back(goal_batchData);
+    }
+    pybind11::array& Q_batch_aref = Q_batch;
+    auto Q_batchData = Q_batch_aref.mutable_unchecked<float,2>();
+    pybind11::array& dQdc_batch_aref = dQdc_batch;
+    auto dQdc_batchData = dQdc_batch_aref.mutable_unchecked<float,5>();
+    pybind11::array& g_batch_aref = g_batch;
+    auto g_batchData = g_batch_aref.mutable_unchecked<float,3>();
+
+#pragma omp parallel for
+    for (int k = 0; k < batch_size; ++k) {
+      planOn2DGrid_cpp(
+          cMap_batch_vec[k],
+          start_batch_vec[k],
+          goal_batch_vec[k],
+          Q_batchData,
+          dQdc_batchData,
+          g_batchData,
+          xDim_vec[k],
+          yDim_vec[k],
+          k);
     }
   }
 }

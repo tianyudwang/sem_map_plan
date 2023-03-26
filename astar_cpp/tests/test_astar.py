@@ -2,7 +2,8 @@
 import numpy as np
 
 import astar_pybind as pyAstar
-
+import timeit
+import os
 
 def test_astar():
 
@@ -24,8 +25,19 @@ def test_astar():
 
     # g value for each state to goal 
     g = np.ones((batch_size, grid_size, grid_size), dtype=np.float32) * 1e6
+    try:
+        _ = os.environ["OMP_NUM_THREADS"]
+    except KeyError:
+        print("Please set OMP_NUM_THREADS before calling");
+        raise
 
-    pyAstar.planBatch2DGrid(cost, start, goal, Q, dQdc, g)
+    print("Threads : %s; Time: " % os.environ["OMP_NUM_THREADS"],
+        timeit.timeit(
+            lambda: pyAstar.planBatch2DGrid(cost, start, goal, Q, dQdc, g),
+            number=1000,
+            globals=locals())
+         )
+
 
 
 if __name__ == '__main__':

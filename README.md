@@ -1,6 +1,7 @@
 # Inverse reinforcement learning for autonomous navigation via differentiable semantic mapping and planning
 [[Project page]](https://tianyudwang.github.io/sirl/) [[Paper]](https://arxiv.org/abs/2101.00186)
 
+![SemMapPlan Teaser](docs/teaser.png)
 
 ## Installation
 We assume that the following commands are run in a python virtual environment.
@@ -33,13 +34,13 @@ export PYTHONPATH=./astar_cpp/lib:${PYTHONPATH}
 
 4. Generate dataset
 ```bash
-python3 scripts/expert_policy.py
+python3 scripts/expert_policy.py --grid_size 16
 ```
 The generated trajectories are under `demonstration/` folder
 
 5. Run training
 ```bash
-python3 scripts/train.py
+python3 scripts/train.py --grid_size 16
 ```
 The tensorboard logs with training metrics are in the `logs/` folder and can be opened with
 ```bash
@@ -49,9 +50,10 @@ tensorboard --logdir logs
 6. Run testing
 To run testing with pretrained models in the `trained_models/` folder
 ```bash
-python3 scripts/test.py 
+python3 scripts/test.py --grid_size 16
 ```
 This shows the success rate of rolling out the trained policy at each state. 
+![Tests](docs/tests.gif)
 
 ## Bibtex
 ```

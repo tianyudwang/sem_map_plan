@@ -49,7 +49,7 @@ def shortest_path(grid, pos, goal, include_goal=False):
                 continue
             if next_pos[1] < 0 or next_pos[1] >= grid.shape[1]:
                 continue
-            if grid[next_pos[0], next_pos[1]] in [2, 9]:
+            if grid[next_pos[0], next_pos[1]] == 2:
                 continue
 
             next_pos_h = next_pos.tobytes()
@@ -59,6 +59,8 @@ def shortest_path(grid, pos, goal, include_goal=False):
             # cost for moving to the next position
             if grid[next_pos[0], next_pos[1]] == 11:
                 cost = 0.5
+            elif grid[next_pos[0], next_pos[1]] == 9:
+                cost = 2.0
             else:
                 cost = 1.0
 
@@ -104,7 +106,7 @@ def generate_episodes(env, save_dir, num):
             'lidar_pts': [], 
             'lidar_labels': [], 
             'agent_pos': [],
-            'goal_loc': [],
+            'goal_pos': [],
             'action': []
         }
 
@@ -125,13 +127,11 @@ def generate_episodes(env, save_dir, num):
             episode['lidar_pts'].append(np.copy(lidar_pts))
             episode['lidar_labels'].append(np.copy(lidar_labels))
             episode['agent_pos'].append(np.copy(state))
-            episode['goal_loc'].append(np.copy(goal))
+            episode['goal_pos'].append(np.copy(goal))
             episode['action'].append(np.copy(action))
 
         if utils.eplen(episode) > 0:
             utils.save_episode(save_dir, episode)
-
-
 
 
 def main():

@@ -67,8 +67,9 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--grid_size', type=int, default=16, const=16, nargs='?',
-        choices=[16, 64], help='Minigrid map size')
+        choices=[16, 64, 128], help='Minigrid map size')
     parser.add_argument('--batch_size', type=int, default=128, help="Minibatch size for training")
+    parser.add_argument('--weight_decay', type=float, default=0.001, help="L2 regularization in optimizer")
     args = parser.parse_args()
 
 
@@ -77,6 +78,7 @@ def main():
     pathlib.Path(trained_model_dir).mkdir(parents=True, exist_ok=False)
 
     directory = pathlib.Path(f'./demonstrations/MiniGrid-LavaLawnS{args.grid_size}-v0')
+    print(f"Loading dataset from {directory}")
     trainset = SemIRLDataset(directory / 'train')
     trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, drop_last=True)
 
@@ -84,30 +86,35 @@ def main():
     validloader = DataLoader(validset, batch_size=args.batch_size, shuffle=True, drop_last=True)
 
     model = SemIRLModel(grid_size=args.grid_size, batch_size=args.batch_size).cuda()
-    optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
+    weight_decay = args.weight_decay
+    optimizer = torch.optim.Adam(model.parameters(), lr=3e-4, weight_decay=weight_decay)
     criterion = nn.CrossEntropyLoss()
     writer = SummaryWriter(log_dir)
 
     curr_best_acc = 0
-    for epoch in tqdm(range(2000)):
+    for epoch in tqdm(range(1000)):
         loss = train(model, trainloader, criterion, optimizer)
         writer.add_scalar("train/loss", loss, epoch)
 
         valid_metrics = validate(model, validloader, criterion)
         for k, v in valid_metrics.items():
             writer.add_scalar(f"valid/{k}", v, epoch)
+        writer.add_scalar("weight_decay", weight_decay, epoch)
         writer.flush()
 
         # Save models
         if curr_best_acc < valid_metrics['acc']:
+            curr_best_acc = valid_metrics['acc']
+            print(f"Current best acc: {curr_best_acc:.2f}, at epoch {epoch}")
+
             directory = trained_model_dir / 'best_model'
             pathlib.Path(directory).mkdir(parents=True, exist_ok=True)
             save_model(model, directory)    
             
-            if epoch % 100 == 0:
-                directory = trained_model_dir / f'epoch_{epoch:04d}'
-                pathlib.Path(directory).mkdir(parents=True, exist_ok=False)
-                save_model(model, directory)
+        if epoch % 100 == 0:
+            directory = trained_model_dir / f'epoch_{epoch:04d}'
+            pathlib.Path(directory).mkdir(parents=True, exist_ok=False)
+            save_model(model, directory)
 
     writer.close()
 

@@ -6,8 +6,7 @@ import torch.nn.functional as F
 
 import astar_pybind as pyAstar   # A*
 
-import matplotlib.pyplot as plt
-
+from segnet import SegNet
 
 class Astar(torch.autograd.Function):
 
@@ -75,68 +74,8 @@ class SemIRLModel(nn.Module):
             dtype=self.dtype, device='cuda'))
 
         # cost encoder parameters
-        self.encoder_conv_00 = nn.Sequential(*[nn.Conv2d(in_channels=num_classes,
-                                                         out_channels=32,
-                                                         kernel_size=3,
-                                                         padding=1),
-                                               nn.BatchNorm2d(32)])
-        self.encoder_conv_01 = nn.Sequential(*[nn.Conv2d(in_channels=32,
-                                                         out_channels=32,
-                                                         kernel_size=3,
-                                                         padding=1),
-                                               nn.BatchNorm2d(32)])
-        self.encoder_conv_02 = nn.Sequential(*[nn.Conv2d(in_channels=32,
-                                                         out_channels=32,
-                                                         kernel_size=3,
-                                                         padding=1),
-                                               nn.BatchNorm2d(32)])
-        self.encoder_conv_10 = nn.Sequential(*[nn.Conv2d(in_channels=32,
-                                                         out_channels=64,
-                                                         kernel_size=3,
-                                                         padding=1),
-                                               nn.BatchNorm2d(64)])
-        self.encoder_conv_11 = nn.Sequential(*[nn.Conv2d(in_channels=64,
-                                                         out_channels=64,
-                                                         kernel_size=3,
-                                                         padding=1),
-                                               nn.BatchNorm2d(64)])
-        self.encoder_conv_12 = nn.Sequential(*[nn.Conv2d(in_channels=64,
-                                                         out_channels=64,
-                                                         kernel_size=3,
-                                                         padding=1),
-                                               nn.BatchNorm2d(64)])
-        self.decoder_convtr_12 = nn.Sequential(*[nn.ConvTranspose2d(in_channels=64,
-                                                                    out_channels=64,
-                                                                    kernel_size=3,
-                                                                    padding=1),
-                                                 nn.BatchNorm2d(64)]) 
-        self.decoder_convtr_11 = nn.Sequential(*[nn.ConvTranspose2d(in_channels=64,
-                                                                    out_channels=64,
-                                                                    kernel_size=3,
-                                                                    padding=1),
-                                                 nn.BatchNorm2d(64)]) 
-        self.decoder_convtr_10 = nn.Sequential(*[nn.ConvTranspose2d(in_channels=64,
-                                                                    out_channels=32,
-                                                                    kernel_size=3,
-                                                                    padding=1),
-                                                 nn.BatchNorm2d(32)]) 
-        self.decoder_convtr_02 = nn.Sequential(*[nn.ConvTranspose2d(in_channels=32,
-                                                                    out_channels=32,
-                                                                    kernel_size=3,
-                                                                    padding=1),
-                                                 nn.BatchNorm2d(32)]) 
-        self.decoder_convtr_01 = nn.Sequential(*[nn.ConvTranspose2d(in_channels=32,
-                                                                    out_channels=32,
-                                                                    kernel_size=3,
-                                                                    padding=1),
-                                                 nn.BatchNorm2d(32)]) 
-        self.decoder_convtr_00 = nn.Sequential(*[nn.ConvTranspose2d(in_channels=32,
-                                                                    out_channels=num_controls,
-                                                                    kernel_size=3,
-                                                                    padding=1),
-                                                 nn.BatchNorm2d(num_controls)]) 
-        self.maxpool2d = nn.MaxPool2d(kernel_size=2, stride=2, return_indices=True)
-        self.maxunpool2d = nn.MaxUnpool2d(kernel_size=2, stride=2)
+        self.cost_encoder = SegNet(num_classes, num_controls, grid_size)
+
 
     def map_encoder(self, grid_cnt_batch):
         """
@@ -152,38 +91,6 @@ class SemIRLModel(nn.Module):
 
         return sem_prob_batch 
 
-
-    def cost_encoder(self, sem_prob_batch):
-        """
-        Learns a cost function from map estimate
-        Inputs:
-            sem_prob_batch: (B, num_classes, grid_size, grid_size)
-        Outputs:
-            cost_batch: (B, num_controls, grid_size, grid_size)
-        """
-        dim_0 = sem_prob_batch.size()
-        x_00 = F.relu(self.encoder_conv_00(sem_prob_batch))
-        x_01 = F.relu(self.encoder_conv_01(x_00))
-        x_02 = F.relu(self.encoder_conv_02(x_01))
-        x_0, indices_0 = self.maxpool2d(x_02)
-
-        dim_1 = x_0.size()
-        x_10 = F.relu(self.encoder_conv_10(x_0))
-        x_11 = F.relu(self.encoder_conv_11(x_10))
-        x_12 = F.relu(self.encoder_conv_12(x_11))
-        x_1, indices_1 = self.maxpool2d(x_12)
-
-        x_1d = self.maxunpool2d(x_1, indices_1, output_size=dim_1)
-        x_12d = F.relu(self.decoder_convtr_12(x_1d))
-        x_11d = F.relu(self.decoder_convtr_11(x_12d))
-        x_10d = F.relu(self.decoder_convtr_10(x_11d))
-
-        x_0d = self.maxunpool2d(x_10d, indices_0)
-        x_02d = F.relu(self.decoder_convtr_02(x_0d))
-        x_01d = F.relu(self.decoder_convtr_01(x_02d))
-        cost_batch = F.relu(self.decoder_convtr_00(x_01d))
-
-        return cost_batch + 1e-6
 
     def astar(self, cost_batch, loc_batch, goal_batch):
         """
@@ -208,12 +115,12 @@ class SemIRLModel(nn.Module):
         # map encoder
         sem_prob_batch = self.map_encoder(grid_cnt_batch)
         
-        # cost encoder
-        cost_batch = self.cost_encoder(sem_prob_batch)
+        # cost encoder, add small constant to avoid negative cycles in planning
+        cost_batch = self.cost_encoder(sem_prob_batch) + 1e-6
 
         # planner
-        assert ((loc_batch >= 0).all() and (loc_batch < self.grid_size).all())
-        assert ((goal_batch >= 0).all() and (goal_batch < self.grid_size).all())
+        assert ((loc_batch >= 1).all() and (loc_batch < self.grid_size-1).all())
+        assert ((goal_batch >= 1).all() and (goal_batch < self.grid_size-1).all())
 
         Q_batch = self.astar(cost_batch, loc_batch, goal_batch)
         logit = -Q_batch

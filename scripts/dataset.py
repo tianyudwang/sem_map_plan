@@ -16,7 +16,7 @@ class SemIRLDataset(Dataset):
         """
         Flatten the episode and timestep dimensions
         """
-        obs_keys = ['grid_count', 'agent_pos', 'goal_loc', 'action']
+        obs_keys = ['grid_count', 'agent_pos', 'goal_pos', 'action']
         flatten_episodes = {k: [] for k in obs_keys}
         for name, episode in episodes.items():
             for k in obs_keys:
@@ -32,6 +32,6 @@ class SemIRLDataset(Dataset):
     def __getitem__(self, idx):
         grid_count = self.episodes['grid_count'][idx]
         agent_pos = self.episodes['agent_pos'][idx]
-        goal_pos = self.episodes['goal_loc'][idx]
+        goal_pos = self.episodes['goal_pos'][idx]
         action = self.episodes['action'][idx]
         return grid_count, agent_pos, goal_pos, action

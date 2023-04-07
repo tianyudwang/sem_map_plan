@@ -13,6 +13,9 @@ labels = {
 }
 
 def save_episode(directory, episode):
+
+    # Pad lidar points with 
+
     timestamp = datetime.datetime.now().strftime('%Y%m%dT%H%M%S')
     identifier = str(uuid.uuid4().hex)
     length = eplen(episode)

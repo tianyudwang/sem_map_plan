@@ -2,7 +2,7 @@
 [[Project page]](https://tianyudwang.github.io/sirl/) [[Paper]](https://arxiv.org/abs/2101.00186)
 
 ![SemMapPlan Teaser](docs/teaser.png)
-![Tests](docs/tests.gif)
+![Tests](docs/tests_16.gif)
 
 ## Installation
 We assume that the following commands are run in a python virtual environment.
@@ -55,6 +55,8 @@ python3 scripts/test.py --grid_size 16
 ```
 This shows the success rate of rolling out the trained policy at each state. 
 
+Here are some visualizations of test episodes in 64 by 64 maps
+![Tests](docs/tests_64.gif)
 
 ## Bibtex
 ```

@@ -2,6 +2,7 @@
 [[Project page]](https://tianyudwang.github.io/sirl/) [[Paper]](https://arxiv.org/abs/2101.00186)
 
 ![SemMapPlan Teaser](docs/teaser.png)
+![Tests](docs/tests.gif)
 
 ## Installation
 We assume that the following commands are run in a python virtual environment.
@@ -53,7 +54,7 @@ To run testing with pretrained models in the `trained_models/` folder
 python3 scripts/test.py --grid_size 16
 ```
 This shows the success rate of rolling out the trained policy at each state. 
-![Tests](docs/tests.gif)
+
 
 ## Bibtex
 ```
